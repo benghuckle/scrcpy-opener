@@ -1,0 +1,21 @@
+export const ipcChannels = {
+  getSnapshot: 'app:get-snapshot',
+  refreshDevices: 'app:refresh-devices',
+  saveGlobalSettings: 'app:save-global-settings',
+  saveToolPaths: 'app:save-tool-paths',
+  renameDevice: 'device:rename',
+  forgetDevice: 'device:forget',
+  setDeviceAutoReconnect: 'device:auto-reconnect',
+  saveDeviceOverrides: 'device:save-overrides',
+  openScrcpy: 'scrcpy:open',
+  stopScrcpy: 'scrcpy:stop',
+  getCommandPreview: 'scrcpy:command-preview',
+  runManualCommand: 'manual-command:run',
+  startQrPairing: 'wireless:start-qr-pairing',
+  getQrPairing: 'wireless:get-qr-pairing',
+  cancelQrPairing: 'wireless:cancel-qr-pairing',
+  manualPair: 'wireless:manual-pair',
+  legacyWirelessConnect: 'wireless:legacy-connect',
+  getDiagnostics: 'app:diagnostics',
+  snapshot: 'app:snapshot'
+} as const

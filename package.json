@@ -1,0 +1,72 @@
+{
+  "name": "scrcpy-opener",
+  "version": "0.1.0",
+  "description": "A simple Electron app to manage ADB devices and launch named scrcpy windows.",
+  "main": "out/main/index.js",
+  "author": "Ben",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && electron-builder",
+    "vendor:download": "node scripts/download-vendor.mjs"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^3.0.0",
+    "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "build": {
+    "appId": "com.scrcpyopener.app",
+    "productName": "Scrcpy Opener",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    }
+  }
+}
