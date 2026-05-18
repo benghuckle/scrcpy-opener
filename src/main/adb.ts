@@ -78,7 +78,7 @@ export function collapseAdbWifiAliases(devices: DeviceInfo[], services: MdnsServ
       ...alias,
       ...device,
       serial: dnsSerial,
-      connectionSerial: alias?.serial || dnsSerial,
+      connectionSerial: alias?.serial || device.serial,
       stableSerial: stableDeviceSerial(dnsSerial),
       wirelessHost: service.host,
       displayName: alias?.model || device.model || stableDeviceSerial(dnsSerial) || service.name,

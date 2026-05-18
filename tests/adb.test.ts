@@ -38,6 +38,24 @@ adb-57051FDCQ0035X-dhruEr	_adb-tls-connect._tcp.	10.200.2.109:44241
       }
     ])
   })
+
+  it('uses the resolved IP as the launch target until ADB exposes the DNS serial', () => {
+    const devices = parseAdbDevices(`List of devices attached
+10.200.2.109:44241	device
+`)
+    const services = parseMdnsServices(`List of discovered mdns services
+adb-57051FDCQ0035X-dhruEr	_adb-tls-connect._tcp.	10.200.2.109:44241
+`)
+
+    expect(collapseAdbWifiAliases(devices, services)).toMatchObject([
+      {
+        serial: 'adb-57051FDCQ0035X-dhruEr._adb-tls-connect._tcp.',
+        connectionSerial: '10.200.2.109:44241',
+        stableSerial: '57051FDCQ0035X',
+        wirelessHost: '10.200.2.109:44241'
+      }
+    ])
+  })
 })
 
 describe('parseMdnsServices', () => {

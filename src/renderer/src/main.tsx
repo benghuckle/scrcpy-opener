@@ -217,6 +217,7 @@ function GlobalSettingsModal({
           <h2>Scrcpy defaults</h2>
           <SettingsForm
             settings={snapshot.state.globalSettings}
+            resetKey="global"
             onSave={(settings) => onRun(() => window.scrcpyOpener.saveGlobalSettings(settings)).then(() => undefined)}
           />
         </section>
@@ -335,6 +336,7 @@ function DeviceDetail({
 
       <SettingsForm
         settings={{ ...defaultScrcpySettings, ...snapshot.state.globalSettings, ...overrides }}
+        resetKey={`device:${device.serial}`}
         onSave={async (settings) => {
           const next = await window.scrcpyOpener.saveDeviceOverrides(device.serial, settings)
           onSnapshot(next)
@@ -346,13 +348,15 @@ function DeviceDetail({
 
 function SettingsForm({
   settings,
+  resetKey,
   onSave
 }: {
   settings: ScrcpySettings
+  resetKey: string
   onSave: (settings: ScrcpySettings) => Promise<void>
 }): JSX.Element {
   const [draft, setDraft] = useState(settings)
-  useEffect(() => setDraft(settings), [settings])
+  useEffect(() => setDraft(settings), [resetKey])
 
   const set = <K extends keyof ScrcpySettings>(key: K, value: ScrcpySettings[K]): void => {
     setDraft((current) => ({ ...current, [key]: value }))

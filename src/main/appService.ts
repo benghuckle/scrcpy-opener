@@ -35,9 +35,16 @@ export class AppService {
   private readonly sessions = new Map<string, ScrcpySession>()
   private readonly logs: LogEntry[] = []
   private readonly qrWatchers = new Map<string, QrWatcher>()
+  private readonly suppressedAutoLaunch = new Set<string>()
+  private readonly activeAutoReconnectDevices = new Set<string>()
+  private autoReconnectCheckRunning = false
   private devices: DeviceInfo[] = []
 
-  constructor(private readonly store: AppStore) {}
+  constructor(private readonly store: AppStore) {
+    setInterval(() => {
+      void this.checkAutoReconnectDevices()
+    }, 5000)
+  }
 
   async getSnapshot(): Promise<AppSnapshot> {
     if (this.devices.length === 0) {
@@ -93,6 +100,10 @@ export class AppService {
 
   setDeviceAutoReconnect(serial: string, enabled: boolean): AppSnapshot {
     this.store.setDeviceAutoReconnect(serial, enabled)
+    if (enabled) {
+      this.suppressedAutoLaunch.delete(serial)
+      void this.checkAutoReconnectDevices()
+    }
     this.devices = this.mergeRememberedDevices(this.devices)
     return this.broadcast()
   }
@@ -121,6 +132,7 @@ export class AppService {
       session.intentionalStop = true
       session.child.kill()
       this.sessions.delete(serial)
+      this.suppressedAutoLaunch.add(serial)
       this.log('info', `Stopped scrcpy for ${serial}`)
     }
     return this.broadcast()
@@ -303,6 +315,73 @@ export class AppService {
     })
   }
 
+  private async checkAutoReconnectDevices(): Promise<void> {
+    if (this.autoReconnectCheckRunning) {
+      return
+    }
+    this.autoReconnectCheckRunning = true
+    try {
+      await this.refreshDevices()
+      const state = this.store.getState()
+      const currentActive = new Set<string>()
+
+      for (const [serial, record] of Object.entries(state.devices)) {
+        if (!record.autoReconnect) {
+          this.activeAutoReconnectDevices.delete(serial)
+          this.suppressedAutoLaunch.delete(serial)
+          continue
+        }
+
+        let device = this.devices.find((entry) => entry.serial === serial)
+        let active = device?.status === 'device'
+
+        if (!active && isAdbTlsConnectSerial(serial)) {
+          active = await this.connectRememberedWirelessDevice(serial)
+          if (active) {
+            await this.refreshDevices()
+            device = this.devices.find((entry) => entry.serial === serial)
+          }
+        }
+
+        if (!active) {
+          this.activeAutoReconnectDevices.delete(serial)
+          this.suppressedAutoLaunch.delete(serial)
+          continue
+        }
+
+        currentActive.add(serial)
+        const becameActive = !this.activeAutoReconnectDevices.has(serial)
+        if (becameActive) {
+          this.suppressedAutoLaunch.delete(serial)
+        }
+
+        if (!this.sessions.has(serial) && !this.suppressedAutoLaunch.has(serial)) {
+          this.log('info', `Auto reconnect opening scrcpy for ${record.displayName || device?.displayName || serial}`)
+          await this.launchScrcpy(serial, true)
+        }
+      }
+
+      this.activeAutoReconnectDevices.clear()
+      currentActive.forEach((serial) => this.activeAutoReconnectDevices.add(serial))
+    } catch (error) {
+      this.log('warn', `Auto reconnect check failed: ${formatError(error)}`)
+      this.broadcast()
+    } finally {
+      this.autoReconnectCheckRunning = false
+    }
+  }
+
+  private async connectRememberedWirelessDevice(serial: string): Promise<boolean> {
+    const { adbPath } = resolveToolPaths(this.store.getState().toolPaths)
+    const servicesResult = await runCommand(adbPath, ['mdns', 'services'], undefined, 8000)
+    const service = parseMdnsServices(servicesResult.stdout).find((entry) => `${entry.name}._adb-tls-connect._tcp.` === serial)
+    if (!service) {
+      return false
+    }
+    await this.connectWirelessHost(service.host)
+    return true
+  }
+
   private scheduleReconnect(serial: string, session: ScrcpySession): void {
     const device = this.store.getState().devices[serial]
     if (!device?.autoReconnect || session.intentionalStop) {
@@ -364,9 +443,6 @@ export class AppService {
     }
 
     for (const [serial, record] of Object.entries(state.devices)) {
-      if (isAdbTlsConnectSerial(serial)) {
-        continue
-      }
       if (!seenBySerial.has(serial)) {
         merged.set(serial, {
           serial,

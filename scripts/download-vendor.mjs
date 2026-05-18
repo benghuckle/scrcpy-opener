@@ -63,8 +63,8 @@ async function prepareWindows() {
   await cp(join(temp, scrcpyDir), out, { recursive: true })
 }
 
-function download(url) {
-  const filePath = join(cacheDir, basename(url))
+function download(url, fileName = basename(new URL(url).pathname)) {
+  const filePath = join(cacheDir, fileName)
   if (existsSync(filePath)) {
     return Promise.resolve(filePath)
   }
@@ -74,7 +74,7 @@ function download(url) {
       if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         file.close()
         rmSync(filePath, { force: true })
-        download(response.headers.location).then(resolveDownload, reject)
+        download(response.headers.location, fileName).then(resolveDownload, reject)
         return
       }
       if (response.statusCode !== 200) {
