@@ -161,8 +161,6 @@ macOS and Windows usage for product demo, event, and video production workflows.
 
 ## Credits
 
-Built by Ben.
-
 Documentation and open-source project preparation assisted by OpenAI Codex.
 
 Scrcpy Opener builds on the excellent work of the
