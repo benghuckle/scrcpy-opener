@@ -1,5 +1,6 @@
 {
   "name": "scrcpy-opener",
+  "productName": "Scrcpy Opener",
   "version": "0.1.0",
   "description": "A simple Electron app to manage ADB devices and launch named scrcpy windows.",
   "main": "out/main/index.js",
@@ -48,6 +49,10 @@
     ],
     "extraResources": [
       {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
         "from": "vendor/bin",
         "to": "bin",
         "filter": [
@@ -56,6 +61,7 @@
       }
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         "dmg",
         "zip"
@@ -63,6 +69,7 @@
       "category": "public.app-category.developer-tools"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "zip"

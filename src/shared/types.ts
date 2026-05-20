@@ -62,6 +62,7 @@ export interface AppState {
   globalSettings: ScrcpySettings
   devices: Record<string, DeviceRecord>
   rememberedWirelessHosts: string[]
+  forgottenDevices: string[]
   toolPaths: ToolPaths
 }
 
@@ -170,6 +171,7 @@ export const defaultAppState: AppState = {
   globalSettings: defaultScrcpySettings,
   devices: {},
   rememberedWirelessHosts: [],
+  forgottenDevices: [],
   toolPaths: {
     adbPath: null,
     scrcpyPath: null

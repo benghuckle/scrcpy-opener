@@ -57,6 +57,15 @@ export function collapseAdbWifiAliases(devices: DeviceInfo[], services: MdnsServ
           displayName: device.model || stableDeviceSerial(device.serial) || dnsService?.name || device.serial,
           transport: 'tcpip'
         })
+      } else if (isWirelessIpSerial(device.serial)) {
+        if (device.status === 'device') {
+          result.push({
+            ...device,
+            connectionSerial: device.connectionSerial || device.serial,
+            stableSerial: device.stableSerial || stableDeviceSerial(device.serial),
+            transport: 'tcpip'
+          })
+        }
       } else if (!consumedSerials.has(device.serial)) {
         result.push({
           ...device,
@@ -94,6 +103,10 @@ export function collapseAdbWifiAliases(devices: DeviceInfo[], services: MdnsServ
 
 export function isAdbTlsConnectSerial(serial: string): boolean {
   return serial.includes('._adb-tls-connect._tcp')
+}
+
+export function isWirelessIpSerial(serial: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(serial)
 }
 
 export function toAdbTlsConnectSerial(serviceName: string): string {

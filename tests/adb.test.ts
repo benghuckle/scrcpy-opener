@@ -56,6 +56,29 @@ adb-57051FDCQ0035X-dhruEr	_adb-tls-connect._tcp.	10.200.2.109:44241
       }
     ])
   })
+
+  it('drops unmatched offline IP sockets because wireless ports are transient', () => {
+    const devices = parseAdbDevices(`List of devices attached
+10.200.2.109:44241	offline
+`)
+
+    expect(collapseAdbWifiAliases(devices, [])).toEqual([])
+  })
+
+  it('keeps connected IP sockets when mDNS has not resolved yet', () => {
+    const devices = parseAdbDevices(`List of devices attached
+10.200.2.109:44241	device
+`)
+
+    expect(collapseAdbWifiAliases(devices, [])).toMatchObject([
+      {
+        serial: '10.200.2.109:44241',
+        connectionSerial: '10.200.2.109:44241',
+        status: 'device',
+        transport: 'tcpip'
+      }
+    ])
+  })
 })
 
 describe('parseMdnsServices', () => {

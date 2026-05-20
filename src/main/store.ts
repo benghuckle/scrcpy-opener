@@ -30,6 +30,9 @@ export class AppStore {
   }
 
   upsertSeenDevice(device: DeviceInfo): void {
+    if (this.state.forgottenDevices.includes(device.serial)) {
+      return
+    }
     const existing = this.state.devices[device.serial]
     this.state.devices[device.serial] = {
       serial: device.serial,
@@ -55,17 +58,22 @@ export class AppStore {
 
   forgetDevice(serial: string): AppState {
     delete this.state.devices[serial]
+    if (!this.state.forgottenDevices.includes(serial)) {
+      this.state.forgottenDevices.push(serial)
+    }
     return this.persist()
   }
 
   setDeviceAutoReconnect(serial: string, enabled: boolean): AppState {
     this.ensureDevice(serial)
+    this.unforgetDevice(serial)
     this.state.devices[serial].autoReconnect = enabled
     return this.persist()
   }
 
   saveDeviceOverrides(serial: string, overrides: AppState['devices'][string]['overrides']): AppState {
     this.ensureDevice(serial)
+    this.unforgetDevice(serial)
     this.state.devices[serial].overrides = overrides
     return this.persist()
   }
@@ -77,7 +85,14 @@ export class AppStore {
     }
   }
 
+  unforgetDevices(serials: string[]): void {
+    const serialSet = new Set(serials)
+    this.state.forgottenDevices = this.state.forgottenDevices.filter((entry) => !serialSet.has(entry))
+    this.persist()
+  }
+
   private ensureDevice(serial: string): void {
+    this.unforgetDevice(serial)
     if (!this.state.devices[serial]) {
       this.state.devices[serial] = {
         serial,
@@ -86,6 +101,10 @@ export class AppStore {
         overrides: {}
       }
     }
+  }
+
+  private unforgetDevice(serial: string): void {
+    this.state.forgottenDevices = this.state.forgottenDevices.filter((entry) => entry !== serial)
   }
 
   private load(): AppState {
@@ -128,6 +147,7 @@ export function migrateState(raw: Partial<AppState>): AppState {
       ])
     ),
     rememberedWirelessHosts: raw.rememberedWirelessHosts ?? [],
+    forgottenDevices: raw.forgottenDevices ?? [],
     toolPaths: {
       adbPath: raw.toolPaths?.adbPath ?? null,
       scrcpyPath: raw.toolPaths?.scrcpyPath ?? null

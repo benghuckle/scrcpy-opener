@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity,
   Cable,
   Check,
+  ChevronDown,
+  ChevronUp,
   Terminal,
   MonitorUp,
   Play,
@@ -24,6 +26,7 @@ const emptySnapshot: AppSnapshot = {
     globalSettings: defaultScrcpySettings,
     devices: {},
     rememberedWirelessHosts: [],
+    forgottenDevices: [],
     toolPaths: { adbPath: null, scrcpyPath: null }
   },
   logs: []
@@ -35,7 +38,6 @@ function App(): JSX.Element {
   const [showGlobal, setShowGlobal] = useState(false)
   const [showWireless, setShowWireless] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
-  const [showDiagnostics, setShowDiagnostics] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -92,9 +94,6 @@ function App(): JSX.Element {
           <button className="icon-button" title="Global settings" onClick={() => setShowGlobal(true)}>
             <Settings size={18} />
           </button>
-          <button className="icon-button" title="Diagnostics" onClick={() => setShowDiagnostics((value) => !value)}>
-            <Activity size={18} />
-          </button>
         </div>
       </header>
 
@@ -138,7 +137,7 @@ function App(): JSX.Element {
         </section>
       </main>
 
-      <LogDrawer snapshot={snapshot} diagnosticsOpen={showDiagnostics} />
+      <BottomPanel snapshot={snapshot} />
 
       {showGlobal && (
         <GlobalSettingsModal snapshot={snapshot} onClose={() => setShowGlobal(false)} onSnapshot={setSnapshot} onRun={run} />
@@ -246,7 +245,7 @@ function DeviceRow({
         <span>{device.serial}</span>
       </div>
       <div className="device-meta">
-        <span className={`status ${device.status}`}>{device.status}</span>
+        <span className={`status ${device.status}`}>{formatDeviceStatus(device.status)}</span>
         <span>{device.transport ?? 'unknown'}</span>
       </div>
       <div className="row-actions" onClick={(event) => event.stopPropagation()}>
@@ -278,10 +277,21 @@ function DeviceDetail({
   const record = snapshot.state.devices[device.serial]
   const overrides = record?.overrides ?? {}
   const [name, setName] = useState(device.displayName)
+  const [editingName, setEditingName] = useState(false)
   const [command, setCommand] = useState('')
 
   useEffect(() => {
     setName(device.displayName)
+    setEditingName(false)
+  }, [device.serial])
+
+  useEffect(() => {
+    if (!editingName) {
+      setName(device.displayName)
+    }
+  }, [device.displayName, editingName])
+
+  useEffect(() => {
     void window.scrcpyOpener.getCommandPreview(device.serial).then((preview) => {
       setCommand([preview.executable, ...preview.args.map(quoteArg)].join(' '))
     })
@@ -316,12 +326,31 @@ function DeviceDetail({
         <label>
           Device name
           <div className="inline-edit">
-            <input value={name} onChange={(event) => setName(event.target.value)} />
-            <button className="icon-button" title="Save name" onClick={() => onRun(() => window.scrcpyOpener.renameDevice(device.serial, name))}>
+            <input
+              value={name}
+              onFocus={() => setEditingName(true)}
+              onChange={(event) => {
+                setEditingName(true)
+                setName(event.target.value)
+              }}
+            />
+            <button
+              className="icon-button"
+              title="Save name"
+              onClick={() =>
+                onRun(async () => {
+                  const next = await window.scrcpyOpener.renameDevice(device.serial, name)
+                  setEditingName(false)
+                  return next
+                })
+              }
+            >
               <Check size={16} />
             </button>
           </div>
         </label>
+      </div>
+      <div className="auto-connect-row">
         <label className="toggle-line">
           <input
             type="checkbox"
@@ -337,6 +366,7 @@ function DeviceDetail({
       <SettingsForm
         settings={{ ...defaultScrcpySettings, ...snapshot.state.globalSettings, ...overrides }}
         resetKey={`device:${device.serial}`}
+        autoSave
         onSave={async (settings) => {
           const next = await window.scrcpyOpener.saveDeviceOverrides(device.serial, settings)
           onSnapshot(next)
@@ -349,17 +379,25 @@ function DeviceDetail({
 function SettingsForm({
   settings,
   resetKey,
+  autoSave = false,
   onSave
 }: {
   settings: ScrcpySettings
   resetKey: string
+  autoSave?: boolean
   onSave: (settings: ScrcpySettings) => Promise<void>
 }): JSX.Element {
   const [draft, setDraft] = useState(settings)
   useEffect(() => setDraft(settings), [resetKey])
 
   const set = <K extends keyof ScrcpySettings>(key: K, value: ScrcpySettings[K]): void => {
-    setDraft((current) => ({ ...current, [key]: value }))
+    setDraft((current) => {
+      const next = { ...current, [key]: value }
+      if (autoSave) {
+        void onSave(next)
+      }
+      return next
+    })
   }
 
   return (
@@ -402,12 +440,14 @@ function SettingsForm({
         Extra flags
         <input value={draft.extraFlags} onChange={(event) => set('extraFlags', event.target.value)} placeholder="--turn-screen-off --render-fit=letterbox" />
       </label>
-      <div className="form-actions">
-        <button className="command-button primary" type="submit">
-          <Check size={16} />
-          Save settings
-        </button>
-      </div>
+      {!autoSave && (
+        <div className="form-actions">
+          <button className="command-button primary" type="submit">
+            <Check size={16} />
+            Save settings
+          </button>
+        </div>
+      )}
     </form>
   )
 }
@@ -424,6 +464,8 @@ function WirelessModal({
   devices: DeviceInfo[]
 }): JSX.Element {
   const [pairing, setPairing] = useState<PairingSession | null>(null)
+  const pairingRef = useRef<PairingSession | null>(null)
+  const closeAfterConnectedRef = useRef(false)
   const [pairHost, setPairHost] = useState('')
   const [pairCode, setPairCode] = useState('')
   const [connectHost, setConnectHost] = useState('')
@@ -431,21 +473,68 @@ function WirelessModal({
   const [legacyHost, setLegacyHost] = useState('')
 
   useEffect(() => {
-    if (!pairing || pairing.status === 'connected' || pairing.status === 'failed' || pairing.status === 'cancelled') {
-      return undefined
-    }
-    const timer = setInterval(() => {
-      void window.scrcpyOpener.getQrPairing(pairing.id).then((next) => {
-        if (next) {
-          setPairing(next)
-        }
-      })
-    }, 1000)
-    return () => clearInterval(timer)
+    pairingRef.current = pairing
   }, [pairing])
 
+  useEffect(() => {
+    let mounted = true
+    void window.scrcpyOpener.startQrPairing().then((next) => {
+      if (mounted) {
+        setPairing(next)
+      }
+    })
+    return () => {
+      mounted = false
+      if (closeAfterConnectedRef.current) {
+        return
+      }
+      const current = pairingRef.current
+      if (current && current.status !== 'connected' && current.status !== 'failed' && current.status !== 'cancelled') {
+        void window.scrcpyOpener.cancelQrPairing(current.id).catch(() => undefined)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!pairing || pairing.status === 'failed' || pairing.status === 'cancelled') {
+      return undefined
+    }
+
+    async function poll(): Promise<void> {
+      const current = pairingRef.current
+      if (!current || closeAfterConnectedRef.current) {
+        return
+      }
+      const next = await window.scrcpyOpener.getQrPairing(current.id)
+      if (!next) {
+        return
+      }
+      setPairing(next)
+      if (next.status === 'connected') {
+        closeAfterConnectedRef.current = true
+        const snapshot = await window.scrcpyOpener.refreshDevices()
+        onSnapshot(snapshot)
+        onClose()
+      }
+    }
+
+    void poll()
+    const timer = setInterval(() => {
+      void poll()
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [onClose, onSnapshot, pairing?.id, pairing?.status])
+
+  function closeWirelessModal(): void {
+    const current = pairingRef.current
+    if (current && current.status !== 'connected' && current.status !== 'failed' && current.status !== 'cancelled') {
+      void window.scrcpyOpener.cancelQrPairing(current.id).catch(() => undefined)
+    }
+    onClose()
+  }
+
   return (
-    <Modal title="Add Wireless Device" onClose={onClose}>
+    <Modal title="Add Wireless Device" onClose={closeWirelessModal}>
       <div className="wireless-layout">
         <section>
           <h2><QrCode size={17} /> QR pairing</h2>
@@ -453,29 +542,11 @@ function WirelessModal({
             <div className="qr-panel">
               <img src={pairing.qrDataUrl} alt="ADB wireless debugging QR code" />
               <p>{pairing.message}</p>
-              <dl className="qr-debug">
-                <div>
-                  <dt>Service</dt>
-                  <dd>{pairing.serviceName}</dd>
-                </div>
-                <div>
-                  <dt>Password</dt>
-                  <dd>{pairing.password}</dd>
-                </div>
-                <div>
-                  <dt>Payload</dt>
-                  <dd>{pairing.qrPayload}</dd>
-                </div>
-              </dl>
-              <button className="command-button" onClick={() => window.scrcpyOpener.cancelQrPairing(pairing.id).then(setPairing)}>
-                Cancel QR
-              </button>
             </div>
           ) : (
-            <button className="command-button primary" onClick={() => window.scrcpyOpener.startQrPairing().then(setPairing)}>
-              <QrCode size={16} />
-              Start QR pairing
-            </button>
+            <div className="qr-panel">
+              <div className="qr-placeholder">Preparing QR code...</div>
+            </div>
           )}
         </section>
         <section>
@@ -489,6 +560,7 @@ function WirelessModal({
               onRun(async () => {
                 const next = await window.scrcpyOpener.manualPair({ pairHost, pairCode, connectHost: connectHost || undefined })
                 onSnapshot(next)
+                onClose()
                 return next
               })
             }
@@ -520,25 +592,86 @@ function WirelessModal({
   )
 }
 
-function LogDrawer({ snapshot, diagnosticsOpen }: { snapshot: AppSnapshot; diagnosticsOpen: boolean }): JSX.Element {
+function BottomPanel({ snapshot }: { snapshot: AppSnapshot }): JSX.Element {
+  const [tab, setTab] = useState<'logs' | 'diagnostics'>('logs')
+  const [expanded, setExpanded] = useState(false)
+  const [height, setHeight] = useState(170)
   const [diagnostics, setDiagnostics] = useState<string | null>(null)
+  const logEndRef = React.useRef<HTMLDivElement | null>(null)
+
+  function startResize(event: React.PointerEvent<HTMLDivElement>): void {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = height
+    const onMove = (moveEvent: PointerEvent): void => {
+      const nextHeight = Math.min(360, Math.max(90, startHeight + startY - moveEvent.clientY))
+      setHeight(nextHeight)
+    }
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
 
   useEffect(() => {
-    if (diagnosticsOpen) {
+    if (tab === 'diagnostics') {
       void window.scrcpyOpener.getDiagnostics().then((value) => setDiagnostics(JSON.stringify(value, null, 2)))
     }
-  }, [diagnosticsOpen])
+  }, [tab, snapshot.logs.length])
+
+  useEffect(() => {
+    if (tab === 'logs') {
+      logEndRef.current?.scrollIntoView({ block: 'end' })
+    }
+  }, [snapshot.logs, tab])
+
+  const logs = [...snapshot.logs].reverse()
 
   return (
-    <footer className="log-drawer">
-      {diagnosticsOpen && diagnostics && <pre>{diagnostics}</pre>}
-      <div className="log-list">
-        {snapshot.logs.slice(0, 4).map((log) => (
-          <span key={log.id} className={log.level}>{log.message}</span>
-        ))}
+    <footer
+      className={`bottom-panel ${expanded ? 'expanded' : 'collapsed'}`}
+      style={expanded ? { '--panel-height': `${height}px` } as React.CSSProperties : undefined}
+    >
+      {expanded && <div className="panel-resize-handle" title="Resize panel" onPointerDown={startResize} />}
+      <div className="panel-tabs">
+        <button className="panel-toggle" title={expanded ? 'Collapse panel' : 'Expand panel'} onClick={() => setExpanded((value) => !value)}>
+          {expanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+        </button>
+        <button className={tab === 'logs' ? 'active' : ''} onClick={() => { setTab('logs'); setExpanded(true) }}>
+          <Terminal size={15} />
+          Logs
+        </button>
+        <button className={tab === 'diagnostics' ? 'active' : ''} onClick={() => { setTab('diagnostics'); setExpanded(true) }}>
+          <Activity size={15} />
+          Diagnostics
+        </button>
       </div>
+      {expanded && tab === 'logs' ? (
+        <div className="panel-body log-panel">
+          {logs.length === 0 ? (
+            <span className="panel-empty">No logs yet.</span>
+          ) : (
+            logs.map((log) => (
+              <div key={log.id} className={`log-entry ${log.level}`}>
+                <time>{formatLogTime(log.timestamp)}</time>
+                <strong>{log.level}</strong>
+                <span>{log.message}</span>
+              </div>
+            ))
+          )}
+          <div ref={logEndRef} />
+        </div>
+      ) : expanded ? (
+        <pre className="panel-body diagnostics-panel">{diagnostics ?? 'Loading diagnostics...'}</pre>
+      ) : null}
     </footer>
   )
+}
+
+function formatLogTime(value: string): string {
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 interface TerminalLine {
@@ -678,6 +811,16 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 
 function quoteArg(value: string): string {
   return /\s/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value
+}
+
+function formatDeviceStatus(status: DeviceInfo['status']): string {
+  if (status === 'device') {
+    return 'connected'
+  }
+  if (status === 'remembered') {
+    return 'saved'
+  }
+  return status
 }
 
 function isSnapshot(value: unknown): value is AppSnapshot {

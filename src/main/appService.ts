@@ -31,12 +31,18 @@ interface QrWatcher {
   session: PairingSession
 }
 
+interface RefreshDevicesOptions {
+  includeForgotten?: boolean
+}
+
 export class AppService {
   private readonly sessions = new Map<string, ScrcpySession>()
   private readonly logs: LogEntry[] = []
   private readonly qrWatchers = new Map<string, QrWatcher>()
+  private readonly completedQrPairings = new Map<string, PairingSession>()
   private readonly suppressedAutoLaunch = new Set<string>()
   private readonly activeAutoReconnectDevices = new Set<string>()
+  private readonly loggedWirelessHosts = new Set<string>()
   private autoReconnectCheckRunning = false
   private devices: DeviceInfo[] = []
 
@@ -53,7 +59,7 @@ export class AppService {
     return this.snapshot()
   }
 
-  async refreshDevices(): Promise<AppSnapshot> {
+  async refreshDevices(options: RefreshDevicesOptions = {}): Promise<AppSnapshot> {
     const { adbPath } = resolveToolPaths(this.store.getState().toolPaths)
     try {
       const [devicesResult, mdnsResult] = await Promise.allSettled([
@@ -64,7 +70,12 @@ export class AppService {
         throw devicesResult.reason
       }
       const services = mdnsResult.status === 'fulfilled' ? parseMdnsServices(mdnsResult.value.stdout) : []
-      const seen = collapseAdbWifiAliases(parseAdbDevices(devicesResult.value.stdout), services)
+      const collapsed = collapseAdbWifiAliases(parseAdbDevices(devicesResult.value.stdout), services)
+      if (options.includeForgotten) {
+        this.store.unforgetDevices(collapsed.map((device) => device.serial))
+      }
+      const forgotten = new Set(this.store.getState().forgottenDevices)
+      const seen = collapsed.filter((device) => !forgotten.has(device.serial))
       seen.filter((device) => device.status === 'device').forEach((device) => this.store.upsertSeenDevice(device))
       this.devices = this.mergeRememberedDevices(seen)
       return this.broadcast()
@@ -82,6 +93,7 @@ export class AppService {
 
   saveToolPaths(paths: AppSnapshot['state']['toolPaths']): AppSnapshot {
     this.store.saveToolPaths(paths)
+    this.log('info', 'Saved adb/scrcpy tool paths')
     return this.broadcast()
   }
 
@@ -94,6 +106,7 @@ export class AppService {
   forgetDevice(serial: string): AppSnapshot {
     this.stopScrcpy(serial)
     this.store.forgetDevice(serial)
+    this.log('info', `Forgot device ${serial}`)
     this.devices = this.devices.filter((device) => device.serial !== serial)
     return this.broadcast()
   }
@@ -130,7 +143,7 @@ export class AppService {
     const session = this.sessions.get(serial)
     if (session) {
       session.intentionalStop = true
-      session.child.kill()
+      forceKillProcess(session.child)
       this.sessions.delete(serial)
       this.suppressedAutoLaunch.add(serial)
       this.log('info', `Stopped scrcpy for ${serial}`)
@@ -163,7 +176,7 @@ export class AppService {
   }
 
   getQrPairing(id: string): PairingSession | null {
-    return this.qrWatchers.get(id)?.session ?? null
+    return this.qrWatchers.get(id)?.session ?? this.completedQrPairings.get(id) ?? null
   }
 
   cancelQrPairing(id: string): PairingSession {
@@ -174,6 +187,7 @@ export class AppService {
     clearInterval(watcher.timer)
     watcher.session.status = 'cancelled'
     watcher.session.message = 'QR pairing cancelled.'
+    this.completedQrPairings.set(id, watcher.session)
     this.qrWatchers.delete(id)
     return watcher.session
   }
@@ -188,7 +202,7 @@ export class AppService {
     if (request.connectHost) {
       await this.connectWirelessHost(request.connectHost)
     }
-    return this.refreshDevices()
+    return this.refreshDevices({ includeForgotten: true })
   }
 
   async legacyWirelessConnect(request: LegacyWirelessRequest): Promise<AppSnapshot> {
@@ -198,7 +212,7 @@ export class AppService {
       throw new Error(tcpip.stderr || tcpip.stdout || 'adb tcpip failed')
     }
     await this.connectWirelessHost(`${request.host}:${request.port}`)
-    return this.refreshDevices()
+    return this.refreshDevices({ includeForgotten: true })
   }
 
   async getDiagnostics(): Promise<Diagnostics> {
@@ -225,7 +239,10 @@ export class AppService {
       throw new Error(connect.stderr || connect.stdout || 'adb connect failed')
     }
     this.store.rememberWirelessHost(host)
-    this.log('info', `Connected wireless device at ${host}`)
+    if (!this.loggedWirelessHosts.has(host)) {
+      this.loggedWirelessHosts.add(host)
+      this.log('info', `Connected wireless device at ${host}`)
+    }
   }
 
   private async pollQrPairing(id: string): Promise<void> {
@@ -238,7 +255,6 @@ export class AppService {
       const result = await runCommand(adbPath, ['mdns', 'services'], undefined, 8000)
       const service = findPairingService(result.stdout, watcher.session.serviceName)
       if (!service) {
-        watcher.session.message = 'Waiting for the phone to scan the QR code...'
         return
       }
       watcher.session.status = 'pairing'
@@ -253,13 +269,15 @@ export class AppService {
       clearInterval(watcher.timer)
       watcher.session.status = 'connected'
       watcher.session.message = `Device paired and connected at ${connectHost}.`
+      this.completedQrPairings.set(id, watcher.session)
       this.qrWatchers.delete(id)
       this.log('info', `QR paired and connected device via ${service.name}`)
-      await this.refreshDevices()
+      await this.refreshDevices({ includeForgotten: true })
     } catch (error) {
       watcher.session.status = 'failed'
       watcher.session.message = formatError(error)
       clearInterval(watcher.timer)
+      this.completedQrPairings.set(id, watcher.session)
       this.qrWatchers.delete(id)
       this.log('error', `QR pairing failed: ${formatError(error)}`)
     }
@@ -299,7 +317,6 @@ export class AppService {
     this.log('info', `Opened scrcpy for ${serial}`)
 
     child.stderr.on('data', (chunk) => this.log('warn', `scrcpy ${serial}: ${String(chunk).trim()}`))
-    child.stdout.on('data', (chunk) => this.log('info', `scrcpy ${serial}: ${String(chunk).trim()}`))
     child.on('error', (error) => {
       this.sessions.delete(serial)
       this.log('error', `scrcpy failed for ${serial}: ${formatError(error)}`)
@@ -510,6 +527,18 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
+}
+
+function forceKillProcess(child: ChildProcess): void {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return
+  }
+  child.kill('SIGKILL')
+  setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
+  }, 300)
 }
 
 function formatError(error: unknown): string {
