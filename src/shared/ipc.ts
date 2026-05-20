@@ -3,6 +3,8 @@ export const ipcChannels = {
   refreshDevices: 'app:refresh-devices',
   saveGlobalSettings: 'app:save-global-settings',
   saveToolPaths: 'app:save-tool-paths',
+  exportSettings: 'app:export-settings',
+  importSettings: 'app:import-settings',
   renameDevice: 'device:rename',
   forgetDevice: 'device:forget',
   setDeviceAutoReconnect: 'device:auto-reconnect',

@@ -8,7 +8,9 @@ export function buildScrcpyCommand(
 ): CommandPreview {
   const args = ['--serial', serial, `--window-title=${displayName}`]
 
-  args.push(`--video-codec=${settings.videoCodec}`)
+  if (settings.videoCodec) {
+    args.push(`--video-codec=${settings.videoCodec}`)
+  }
 
   if (settings.videoBitRate.trim()) {
     args.push(`--video-bit-rate=${settings.videoBitRate.trim()}`)
@@ -43,8 +45,9 @@ export function buildScrcpyCommand(
   if (!settings.lockAspectRatio) {
     args.push('--no-window-aspect-ratio-lock')
   }
-  if (!settings.clipboardAutosync) {
-    args.push('--no-clipboard-autosync')
+  if (settings.lockOrientation || settings.captureOrientation !== 'default') {
+    const orientation = settings.captureOrientation === 'default' ? '' : settings.captureOrientation
+    args.push(`--capture-orientation=${settings.lockOrientation ? '@' : ''}${orientation}`)
   }
   if (settings.readOnly) {
     args.push('--no-control')

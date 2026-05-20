@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AppStore, migrateState } from '../src/main/store'
+import { defaultScrcpySettings } from '../src/shared/types'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -18,7 +19,7 @@ describe('migrateState', () => {
     })
 
     expect(state.version).toBe(1)
-    expect(state.globalSettings.videoCodec).toBe('h264')
+    expect(state.globalSettings.videoCodec).toBe('')
     expect(state.devices.abc.displayName).toBe('Phone')
     expect(state.devices.abc.autoReconnect).toBe(true)
     expect(state.devices.abc.overrides).toEqual({ maxFps: 30 })
@@ -57,5 +58,28 @@ describe('migrateState', () => {
 
     expect(store.getState().forgottenDevices).toEqual([])
     expect(store.getState().devices.abc.displayName).toBe('Phone')
+  })
+
+  it('replaces state through migration for imported settings', () => {
+    const store = new AppStore(join(mkdtempSync(join(tmpdir(), 'scrcpy-opener-')), 'state.json'))
+    store.replaceState({
+      globalSettings: { ...defaultScrcpySettings, videoBitRate: '12M' },
+      devices: {
+        abc: {
+          serial: 'abc',
+          displayName: 'Imported Phone',
+          autoReconnect: true,
+          overrides: { maxSize: 1200 }
+        }
+      },
+      rememberedWirelessHosts: ['10.0.0.2:5555']
+    })
+
+    const state = store.getState()
+    expect(state.globalSettings.videoBitRate).toBe('12M')
+    expect(state.globalSettings.videoCodec).toBe('')
+    expect(state.devices.abc.displayName).toBe('Imported Phone')
+    expect(state.devices.abc.overrides.maxSize).toBe(1200)
+    expect(state.rememberedWirelessHosts).toEqual(['10.0.0.2:5555'])
   })
 })

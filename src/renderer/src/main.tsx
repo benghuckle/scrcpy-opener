@@ -185,6 +185,18 @@ function GlobalSettingsModal({
     <Modal title="Global Settings" onClose={onClose}>
       <div className="modal-stack">
         <section>
+          <h2>Import / export</h2>
+          <p className="helper-text">Move global defaults, device names, device overrides, auto reconnect settings, and tool paths between installs.</p>
+          <div className="form-actions split-actions">
+            <button className="command-button" onClick={() => onRun(window.scrcpyOpener.importSettings)}>
+              Import settings
+            </button>
+            <button className="command-button" onClick={() => onRun(window.scrcpyOpener.exportSettings)}>
+              Export settings
+            </button>
+          </div>
+        </section>
+        <section>
           <h2>Tool paths</h2>
           <div className="settings-grid">
             <label>
@@ -214,9 +226,11 @@ function GlobalSettingsModal({
         </section>
         <section>
           <h2>Scrcpy defaults</h2>
+          <p className="helper-text">Defaults apply to all newly added devices. You can override them per device from the device panel.</p>
           <SettingsForm
             settings={snapshot.state.globalSettings}
             resetKey="global"
+            autoSave
             onSave={(settings) => onRun(() => window.scrcpyOpener.saveGlobalSettings(settings)).then(() => undefined)}
           />
         </section>
@@ -363,6 +377,7 @@ function DeviceDetail({
 
       <div className="command-preview">{command}</div>
 
+      <p className="helper-text">Device overrides apply only to this device.</p>
       <SettingsForm
         settings={{ ...defaultScrcpySettings, ...snapshot.state.globalSettings, ...overrides }}
         resetKey={`device:${device.serial}`}
@@ -412,6 +427,7 @@ function SettingsForm({
         <label>
           Codec
           <select value={draft.videoCodec} onChange={(event) => set('videoCodec', event.target.value as ScrcpySettings['videoCodec'])}>
+            <option value="">Default</option>
             <option value="h264">H.264</option>
             <option value="h265">H.265</option>
             <option value="av1">AV1</option>
@@ -425,6 +441,26 @@ function SettingsForm({
         <NumberField label="Max size" value={draft.maxSize} onChange={(value) => set('maxSize', value)} />
         <NumberField label="Window width" value={draft.windowWidth} onChange={(value) => set('windowWidth', value)} />
         <NumberField label="Window height" value={draft.windowHeight} onChange={(value) => set('windowHeight', value)} />
+        <label>
+          Orientation
+          <select value={draft.captureOrientation} onChange={(event) => set('captureOrientation', event.target.value as ScrcpySettings['captureOrientation'])}>
+            <option value="default">Default</option>
+            <option value="0">0°</option>
+            <option value="90">90° clockwise</option>
+            <option value="180">180°</option>
+            <option value="270">270° clockwise</option>
+            <option value="flip0">Flip 0°</option>
+            <option value="flip90">Flip 90°</option>
+            <option value="flip180">Flip 180°</option>
+            <option value="flip270">Flip 270°</option>
+          </select>
+        </label>
+        <Toggle
+          className="full-row"
+          label="Lock orientation"
+          checked={draft.lockOrientation}
+          onChange={(value) => set('lockOrientation', value)}
+        />
       </div>
       <div className="toggles">
         <Toggle label="Stay awake" checked={draft.stayAwake} onChange={(value) => set('stayAwake', value)} />
@@ -433,7 +469,6 @@ function SettingsForm({
         <Toggle label="Fullscreen" checked={draft.fullscreen} onChange={(value) => set('fullscreen', value)} />
         <Toggle label="Borderless" checked={draft.borderless} onChange={(value) => set('borderless', value)} />
         <Toggle label="Lock aspect ratio" checked={draft.lockAspectRatio} onChange={(value) => set('lockAspectRatio', value)} />
-        <Toggle label="Clipboard autosync" checked={draft.clipboardAutosync} onChange={(value) => set('clipboardAutosync', value)} />
         <Toggle label="Read only" checked={draft.readOnly} onChange={(value) => set('readOnly', value)} />
       </div>
       <label>
@@ -800,9 +835,19 @@ function NumberField({ label, value, onChange }: { label: string; value: number 
   )
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }): JSX.Element {
+function Toggle({
+  label,
+  checked,
+  className,
+  onChange
+}: {
+  label: string
+  checked: boolean
+  className?: string
+  onChange: (value: boolean) => void
+}): JSX.Element {
   return (
-    <label className="toggle-line">
+    <label className={`toggle-line${className ? ` ${className}` : ''}`}>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       {label}
     </label>

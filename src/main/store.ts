@@ -29,6 +29,11 @@ export class AppStore {
     return this.persist()
   }
 
+  replaceState(raw: Partial<AppState>): AppState {
+    this.state = migrateState(raw)
+    return this.persist()
+  }
+
   upsertSeenDevice(device: DeviceInfo): void {
     if (this.state.forgottenDevices.includes(device.serial)) {
       return

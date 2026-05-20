@@ -1,6 +1,7 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, dialog } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { readFile, writeFile } from 'node:fs/promises'
 import QRCode from 'qrcode'
 import { collapseAdbWifiAliases, isAdbTlsConnectSerial, parseAdbDevices, parseMdnsServices } from './adb'
 import { runCommand } from './exec'
@@ -94,6 +95,41 @@ export class AppService {
   saveToolPaths(paths: AppSnapshot['state']['toolPaths']): AppSnapshot {
     this.store.saveToolPaths(paths)
     this.log('info', 'Saved adb/scrcpy tool paths')
+    return this.broadcast()
+  }
+
+  async exportSettings(): Promise<AppSnapshot> {
+    const targetWindow = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    const result = await dialog.showSaveDialog(targetWindow, {
+      title: 'Export Scrcpy Opener Settings',
+      defaultPath: 'scrcpy-opener-settings.json',
+      filters: [{ name: 'JSON Settings', extensions: ['json'] }]
+    })
+    if (result.canceled || !result.filePath) {
+      return this.snapshot()
+    }
+
+    await writeFile(result.filePath, `${JSON.stringify(this.store.getState(), null, 2)}\n`, 'utf8')
+    this.log('info', `Exported settings to ${result.filePath}`)
+    return this.broadcast()
+  }
+
+  async importSettings(): Promise<AppSnapshot> {
+    const targetWindow = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    const result = await dialog.showOpenDialog(targetWindow, {
+      title: 'Import Scrcpy Opener Settings',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON Settings', extensions: ['json'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return this.snapshot()
+    }
+
+    const filePath = result.filePaths[0]
+    const raw = JSON.parse(await readFile(filePath, 'utf8')) as Partial<AppSnapshot['state']>
+    this.store.replaceState(raw)
+    this.devices = this.mergeRememberedDevices(this.devices)
+    this.log('info', `Imported settings from ${filePath}`)
     return this.broadcast()
   }
 

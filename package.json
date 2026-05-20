@@ -6,7 +6,6 @@
   "main": "out/main/index.js",
   "author": "Ben",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
@@ -14,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win --x64 --arm64",
     "vendor:download": "node scripts/download-vendor.mjs"
   },
   "dependencies": {

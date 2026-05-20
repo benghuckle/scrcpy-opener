@@ -80,6 +80,11 @@ button:disabled {
   gap: 8px;
 }
 
+.split-actions {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 390px 1fr;
@@ -243,6 +248,14 @@ select {
   gap: 16px;
 }
 
+.helper-text {
+  margin-bottom: 8px;
+  color: #66736c;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 .toggles {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -261,6 +274,10 @@ select {
   width: 16px;
   height: 16px;
   accent-color: #2d7d63;
+}
+
+.full-row {
+  grid-column: 1 / -1;
 }
 
 .icon-button,

@@ -1,6 +1,8 @@
 export type DeviceStatus = 'device' | 'offline' | 'unauthorized' | 'unknown' | 'remembered'
 
-export type VideoCodec = 'h264' | 'h265' | 'av1'
+export type VideoCodec = '' | 'h264' | 'h265' | 'av1'
+
+export type ScrcpyOrientation = 'default' | '0' | '90' | '180' | '270' | 'flip0' | 'flip90' | 'flip180' | 'flip270'
 
 export interface DeviceInfo {
   serial: string
@@ -32,7 +34,8 @@ export interface ScrcpySettings {
   fullscreen: boolean
   borderless: boolean
   lockAspectRatio: boolean
-  clipboardAutosync: boolean
+  captureOrientation: ScrcpyOrientation
+  lockOrientation: boolean
   readOnly: boolean
   extraFlags: string
 }
@@ -131,6 +134,8 @@ export interface AppApi {
   refreshDevices: () => Promise<AppSnapshot>
   saveGlobalSettings: (settings: ScrcpySettings) => Promise<AppSnapshot>
   saveToolPaths: (paths: ToolPaths) => Promise<AppSnapshot>
+  exportSettings: () => Promise<AppSnapshot>
+  importSettings: () => Promise<AppSnapshot>
   renameDevice: (serial: string, displayName: string) => Promise<AppSnapshot>
   forgetDevice: (serial: string) => Promise<AppSnapshot>
   setDeviceAutoReconnect: (serial: string, enabled: boolean) => Promise<AppSnapshot>
@@ -149,8 +154,8 @@ export interface AppApi {
 }
 
 export const defaultScrcpySettings: ScrcpySettings = {
-  videoCodec: 'h264',
-  videoBitRate: '8M',
+  videoCodec: '',
+  videoBitRate: '',
   maxFps: null,
   maxSize: null,
   windowWidth: null,
@@ -161,7 +166,8 @@ export const defaultScrcpySettings: ScrcpySettings = {
   fullscreen: false,
   borderless: false,
   lockAspectRatio: true,
-  clipboardAutosync: true,
+  captureOrientation: 'default',
+  lockOrientation: false,
   readOnly: false,
   extraFlags: ''
 }

@@ -49,6 +49,8 @@ function registerIpc(): void {
   ipcMain.handle(ipcChannels.refreshDevices, () => service.refreshDevices())
   ipcMain.handle(ipcChannels.saveGlobalSettings, (_event, settings) => service.saveGlobalSettings(settings))
   ipcMain.handle(ipcChannels.saveToolPaths, (_event, paths) => service.saveToolPaths(paths))
+  ipcMain.handle(ipcChannels.exportSettings, () => service.exportSettings())
+  ipcMain.handle(ipcChannels.importSettings, () => service.importSettings())
   ipcMain.handle(ipcChannels.renameDevice, (_event, serial, displayName) => service.renameDevice(serial, displayName))
   ipcMain.handle(ipcChannels.forgetDevice, (_event, serial) => service.forgetDevice(serial))
   ipcMain.handle(ipcChannels.setDeviceAutoReconnect, (_event, serial, enabled) =>
