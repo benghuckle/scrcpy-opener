@@ -108,6 +108,11 @@ present.
 macOS and Windows signing are intentionally credential-driven. Do not commit
 certificates, passwords, App Store Connect keys, or notary credentials.
 
+The public `v0.1.0` macOS artifacts were built unsigned/unnotarized because no
+paid Apple Developer Program `Developer ID Application` certificate or
+notarization credentials were available at build time. Users may need to
+right-click or Control-click the app and choose `Open` to bypass Gatekeeper.
+
 ### macOS
 
 For public distribution outside the Mac App Store, use an Apple Developer

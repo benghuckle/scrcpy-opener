@@ -3,6 +3,23 @@
 This guide covers the main Scrcpy Opener workflows for demo operators and video
 production setups.
 
+## macOS First Launch
+
+Current macOS release builds are unsigned and not notarized. On first launch,
+macOS may block the app with a Gatekeeper warning because Apple cannot verify
+the developer.
+
+To open it:
+
+1. Open the downloaded DMG or ZIP.
+2. Move `Scrcpy Opener.app` to `Applications` if desired.
+3. Right-click or Control-click `Scrcpy Opener.app`.
+4. Choose `Open`.
+5. Confirm the macOS security prompt.
+
+Only bypass Gatekeeper for releases you downloaded from the official project
+page and trust.
+
 ## Prepare Android Devices
 
 On each Android device:

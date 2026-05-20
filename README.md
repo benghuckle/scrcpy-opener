@@ -70,6 +70,14 @@ demo machines do not need a separate Android platform-tools or scrcpy setup.
 During development, the app falls back to `adb` and `scrcpy` on your `PATH` if
 bundled tools are not present.
 
+## macOS Signing Notice
+
+Current macOS release builds are unsigned and not notarized. macOS Gatekeeper may
+warn that the app cannot be opened because Apple cannot verify the developer.
+
+To run the app anyway, open it with right-click or Control-click, choose `Open`,
+then confirm the prompt. Only do this if you trust the downloaded release.
+
 ## Getting Started
 
 Install dependencies:
