@@ -78,6 +78,19 @@ warn that the app cannot be opened because Apple cannot verify the developer.
 To run the app anyway, open it with right-click or Control-click, choose `Open`,
 then confirm the prompt. Only do this if you trust the downloaded release.
 
+## Run the Release on macOS
+
+1. Download the latest macOS `.dmg` or `.zip` from the
+   [GitHub Releases](https://github.com/benghuckle/scrcpy-opener/releases) page.
+2. If using the `.dmg`, open it and drag `Scrcpy Opener.app` to `Applications`.
+   If using the `.zip`, unzip it and move `Scrcpy Opener.app` to `Applications`.
+3. Open `Applications`.
+4. Right-click or Control-click `Scrcpy Opener.app`.
+5. Choose `Open`.
+6. Confirm the macOS security prompt.
+7. Connect or pair an Android device, then click `Open` in Scrcpy Opener to
+   launch the named scrcpy window.
+
 ## Getting Started
 
 Install dependencies:
